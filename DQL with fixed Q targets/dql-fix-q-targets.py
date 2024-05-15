@@ -75,11 +75,11 @@ def play_one_step(env, state, epsilon=0):
 
 if __name__ == '__main__':
 
-    batch_size = 256
+    batch_size = 132
     n_episode = 2000
     n_output = env.action_space.n
     discount_factor = 0.95
-    lr = 0.0005
+    lr = 0.001
     loss_fn = MeanSquaredError('sum_over_batch_size', 'mean_squared_error')
     optimizer = Adam(learning_rate=lr)
     replay_buffer = deque(maxlen=10000)
