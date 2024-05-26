@@ -4,7 +4,7 @@ os.environ['TF_USE_LEGACY_KERAS'] = '1'
 
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from tf_agents.environments import suite_gym
+from tf_agents.environments import suite_gym, wrappers
 from tf_agents.environments import TFPyEnvironment
 from tf_agents.networks.q_network import QNetwork
 from tf_agents.agents.dqn.dqn_agent import DqnAgent
@@ -17,6 +17,8 @@ from tf_agents.policies.greedy_policy import GreedyPolicy
 from tf_agents.drivers.dynamic_step_driver import DynamicStepDriver
 from tf_agents.metrics import tf_metrics
 from tensorflow.python.data.ops.map_op import _MapDataset
+from tf_agents.policies.policy_saver import PolicySaver
+import imageio
 
 from datetime import datetime
 
@@ -38,7 +40,7 @@ def cal_avg_rewards(env : TFPyEnvironment, policy : GreedyPolicy, n_episodes : i
     return (tot_rewards / n_episodes).numpy()[0]
 
 
-def train_agent(n_iterations, test_env : TFPyEnvironment,  agent : DqnAgent, driver : DynamicStepDriver, dataset : _MapDataset, log_interval :int = 200) -> tuple[list,list]:
+def train_agent(n_iterations : int, test_env : TFPyEnvironment,  agent : DqnAgent, driver : DynamicStepDriver, dataset : _MapDataset, log_interval :int = 200) -> tuple[list,list]:
     
     driver.run = common.function(driver.run)
     agent.train = common.function(agent.train)
@@ -65,6 +67,18 @@ def train_agent(n_iterations, test_env : TFPyEnvironment,  agent : DqnAgent, dri
 
     return avg_returns, avg_rewards
 
+def create_policy_eval_video(test_py_env : wrappers.TimeLimit, test_env : TFPyEnvironment, policy : GreedyPolicy, filename : str, num_episodes : int = 5, fps : int = 30):
+  filename = filename + ".mp4"
+  with imageio.get_writer(filename, fps=fps) as video:
+    for _ in range(num_episodes):
+      time_step = test_env.reset()
+      video.append_data(test_py_env.render())
+      while not time_step.is_last():
+        action_step = policy.action(time_step)
+        time_step = test_env.step(action_step.action)
+        video.append_data(test_py_env.render())
+#   return embed_mp4(filename)
+
 
 if __name__ == '__main__':
 
@@ -77,16 +91,15 @@ if __name__ == '__main__':
     target_model_update = 1
     rb_max_len = 100000
     training_batch_size = 64
-    pre_populate = 0.01*rb_max_len
     driver_steps = 1
-    log_interval = 200
-    n_iterations = 20000
+    n_iterations = 35000
+    log_interval = int(0.01*n_iterations)
 
     # functions
     optimizer = Adam(learning_rate=lr)
     epsilon_greedy = PolynomialDecay(
         initial_learning_rate=1.0,
-        decay_steps=0.8*n_iterations,
+        decay_steps=0.2*n_iterations,
         end_learning_rate=0.01,
         power=1.0
     )
@@ -141,7 +154,7 @@ if __name__ == '__main__':
         env=train_env,
         policy=RandomTFPolicy(train_env.time_step_spec(), train_env.action_spec()),
         observers=[rb_observer],
-        num_steps=1000#max(100, pre_populate)
+        num_steps=1000
     )
     # Run the initial collect driver to prepopulate
     initial_collect_driver.run()
@@ -169,6 +182,9 @@ if __name__ == '__main__':
         log_interval=log_interval
     )
 
+    # issue with some package versions
+    # policy_saver = PolicySaver(agent.policy)
+
     # Saving plots
     interval = range(0, n_iterations, log_interval)
 
@@ -184,4 +200,9 @@ if __name__ == '__main__':
 
     end_time = datetime.now()
 
-    print(f"============= Training ended : {end_time-start_time} ==============")
+    print(f'====> Training ended : {end_time-start_time}')
+
+    print('====> Exploring environment with trained agent and saving in a video')
+    create_policy_eval_video(test_gym_env, test_env, agent.policy, 'trained_agent')
+
+    print('====> Video saved')
