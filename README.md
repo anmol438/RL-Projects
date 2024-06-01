@@ -47,3 +47,54 @@
 
 ![img](./4-Double%20DQN/rewards.png "DQL with fixed Q targets Rewards")
 * This algorithm trained much faster and is much stable.
+
+# TF Agents
+
+The TF-Agents library is Reinforcement Learning library based on Tensorflow. It implements the above discussed algorithms along with many more. It also provides the various RL components which are efficient, scalable and customizable. It provide a training architecture to implement any algorithm with tf agents.  
+The architecture is divided into two parts that run in parallel:
+* Collection
+  + Collect Policy
+  + Collect Driver
+  + Environments
+  + Observers
+  + Replay Buffers
+* Training
+  + Agent
+  + Networks
+  + Dataset
+
+### The architecture is usually setup like this with DQN
+
+* A **DQN** agent will be trained for a environment with **Deep Q Network** in the backend.
+* Tf agents provides a **uniform replay buffer** which will be populated with experiences during environment exploration by the **collect driver**.
+* Between replay buffer and collect driver there is a **observer** which will write the experiences coming from driver to the replay buffer.
+* For collect driver, we have **Dynamic Step Driver** and **Dynamic Episode Driver** which run a step and episode in the environment respectively.
+* A **Dataset** is defined to collect a sample of experiences from the replay buffer and pass to the agent for training.
+* To train the agent, for each training step, a collect driver runs, experiences are fetched from dataset and the agent is trained with these experiences.
+* To observe the training process, we can log **tf_metrics** or the rewards by testing the agent at regular intervals.
+* The choice of the driver depends on the specific training goals. 
+* Step driver has fine-grained control and has consistent data flow which allows the number of steps to be collected and it is useful for steady and incremental training.
+* Episode driver is useful for learning policies that requires full episode but it can be unstable as full episode data is collected in one training step.
+
+## 5. CartPole Env with DQN
+
+The agent is trained for CartPole-v1 environment with tf_agents.
+### With Dynamic Step Driver
+
+![img](./5-CartPole-tf_agents-DQN/with_step_driver/Averages.png)
+
+<video width="320" height="240" controls>
+  <source src="./5-CartPole-tf_agents-DQN/with_step_driver/trained_agent.mp4" type="video/mp4">
+</video>
+
+
+### With Dynamic Episode Driver
+
+![img](./5-CartPole-tf_agents-DQN/with_episode_driver/Averages.png)
+
+<video width="320" height="240" controls>
+  <source src="./5-CartPole-tf_agents-DQN/with_episode_driver/trained_agent.mp4" type="video/mp4">
+</video>
+
+* The agent is well trained and performed perfect.
+* If we look at average return, with the step driver the training is smooth while with episode driver it is unsteady.
