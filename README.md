@@ -83,18 +83,13 @@ The agent is trained for CartPole-v1 environment with tf_agents.
 
 ![img](./5-CartPole-tf_agents-DQN/with_step_driver/Averages.png)
 
-<video width="320" height="240" controls>
-  <source src="./5-CartPole-tf_agents-DQN/with_step_driver/trained_agent.mp4" type="video/mp4">
-</video>
-
+[Watch the video](https://github.com/anmol438/RL-Projects/assets/50985412/db72afa5-7279-4e5a-9746-0e4b94fc0497)
 
 ### With Dynamic Episode Driver
 
 ![img](./5-CartPole-tf_agents-DQN/with_episode_driver/Averages.png)
 
-<video width="320" height="240" controls>
-  <source src="./5-CartPole-tf_agents-DQN/with_episode_driver/trained_agent.mp4" type="video/mp4">
-</video>
+https://github.com/anmol438/RL-Projects/assets/50985412/c4608f7f-0065-4d5a-b531-7c95795fb32d
 
 * The agent is well trained and performed perfect.
 * If we look at average return, with the step driver the training is smooth while with episode driver it is unsteady.
