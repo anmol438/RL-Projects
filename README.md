@@ -93,3 +93,15 @@ https://github.com/anmol438/RL-Projects/assets/50985412/c4608f7f-0065-4d5a-b531-
 
 * The agent is well trained and performed perfect.
 * If we look at average return, with the step driver the training is smooth while with episode driver it is unsteady.
+
+
+## 6. Atari - Breakout Env
+
+* This env is not simple as CartPole env. So I will explain it in little detail.
+* The Atari env needs to be installed separately for gym. Please read **"./6-BreakoutAtari-tf_agents-DQN/readme.md"** for installation help.
+* The raw Breakout env looks like this:
+  ![img](./6-BreakoutAtari-tf_agents-DQN/raw_env.png)
+* For efficient training, the grayscaled and framestacked environment is good. After preprocessing it looks like this:
+  ![img](./6-BreakoutAtari-tf_agents-DQN/stacked_env.png)
+* Four colours represent four consecutive different frames.
+  
