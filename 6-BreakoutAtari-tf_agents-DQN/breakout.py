@@ -10,20 +10,24 @@ from tf_agents.networks.q_network import QNetwork
 from tf_agents.agents.dqn.dqn_agent import DqnAgent
 from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
 from tf_agents.metrics import tf_metrics
+from tf_agents.drivers.dynamic_step_driver import DynamicStepDriver
+from tf_agents.policies.random_tf_policy import RandomTFPolicy
+
 
 from tensorflow.keras.layers import Lambda
 from tensorflow.keras.optimizers.schedules import PolynomialDecay
 from tensorflow.keras.losses import Huber
 from tensorflow.keras.optimizers import RMSprop
 
+from datetime import datetime
+
 
 if __name__ == '__main__':
+    
+    start_time = datetime.now()
 
+    env_name = 'BreakoutNoFrameskip-v4'
     max_ep_step = 1000 # max_ep_step*4 = ALE frames per episode
-    collect_driver_steps = 4 # run 4 steps for each train step
-    target_update = 1
-    train_step = tf.Variable(0) # collect_driver_steps*4 = ALE frames per train step
-    discount_factor = 0.99
 
     # for epsilon greedy
     decay_steps = 2500 # decay_steps*collect_driver_steps*4 = ALE frames for decaying
@@ -34,10 +38,14 @@ if __name__ == '__main__':
     epsilon = 1e-7 # Improves numerical stability
 
     rb_len = 10000
+    collect_driver_steps = 4 # run 4 steps for each train step
+    initial_driver_steps = 1000
+    target_update = 1
+    train_step = tf.Variable(0) # collect_driver_steps*4 = ALE frames per train step
+    discount_factor = 0.99
 
     # Creating train env
 
-    env_name = 'BreakoutNoFrameskip-v4'
     train_gym_env = suite_atari.load(
         env_name,
         max_episode_steps=max_ep_step,
@@ -107,3 +115,26 @@ if __name__ == '__main__':
         tf_metrics.AverageReturnMetric(),
         tf_metrics.AverageEpisodeLengthMetric()
     ]
+
+    # Create a driver to pre populate the replay buffer
+
+    initial_driver = DynamicStepDriver(
+        train_tf_env,
+        RandomTFPolicy(train_tf_env.time_step_spec(), train_tf_env.action_spec()),
+        observers=[rb_observer],
+        num_steps=initial_driver_steps
+    )
+
+    initial_driver.run()
+
+    # Create the main collect driver
+
+    collect_driver = DynamicStepDriver(
+        train_tf_env,
+        agent.collect_policy,
+        observers=[rb_observer]+train_metrics,
+        num_steps=collect_driver_steps
+    )
+
+    end_time = datetime.now()
+    print(f'======= Finished Training in {end_time-start_time} =======')
