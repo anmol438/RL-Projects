@@ -43,6 +43,7 @@ if __name__ == '__main__':
     target_update = 1
     train_step = tf.Variable(0) # collect_driver_steps*4 = ALE frames per train step
     discount_factor = 0.99
+    batch_size = 64
 
     # Creating train env
 
@@ -135,6 +136,14 @@ if __name__ == '__main__':
         observers=[rb_observer]+train_metrics,
         num_steps=collect_driver_steps
     )
+
+    # Create a dataset to sample trajectories
+
+    dataset = replay_buffer.as_dataset(
+        sample_batch_size=batch_size,
+        num_steps=2,
+        num_parallel_calls=3
+    ).prefetch(3)
 
     end_time = datetime.now()
     print(f'======= Finished Training in {end_time-start_time} =======')
