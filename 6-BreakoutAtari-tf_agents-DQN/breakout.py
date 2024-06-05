@@ -5,8 +5,11 @@ from tf_agents.environments import suite_atari
 from tf_agents.environments.tf_py_environment import TFPyEnvironment
 from tf_agents.environments.atari_preprocessing import AtariPreprocessing
 from tf_agents.environments.atari_wrappers import FrameStack4
+
 from tf_agents.networks.q_network import QNetwork
 from tf_agents.agents.dqn.dqn_agent import DqnAgent
+from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuffer
+from tf_agents.metrics import tf_metrics
 
 from tensorflow.keras.layers import Lambda
 from tensorflow.keras.optimizers.schedules import PolynomialDecay
@@ -16,19 +19,21 @@ from tensorflow.keras.optimizers import RMSprop
 
 if __name__ == '__main__':
 
-    max_ep_step = 1000 # max_ep_step*4 ALE frames
+    max_ep_step = 1000 # max_ep_step*4 = ALE frames per episode
     collect_driver_steps = 4 # run 4 steps for each train step
     target_update = 1
-    train_step = tf.Variable(0)
+    train_step = tf.Variable(0) # collect_driver_steps*4 = ALE frames per train step
     discount_factor = 0.99
 
     # for epsilon greedy
-    decay_steps = 2500 # decay_steps*collect_driver_steps = ALE frames
+    decay_steps = 2500 # decay_steps*collect_driver_steps*4 = ALE frames for decaying
 
     # for optimizer
     lr = 1e-4 # size of the steps in gradient descent
     rho = 0.95 # decay rate of the moving average of squared gradients
     epsilon = 1e-7 # Improves numerical stability
+
+    rb_len = 10000
 
     # Creating train env
 
@@ -85,3 +90,20 @@ if __name__ == '__main__':
     )
     
     agent.initialize()
+
+    # Create a Replay Buffer and Observers
+
+    replay_buffer = TFUniformReplayBuffer(
+        agent.collect_data_spec,
+        batch_size=train_tf_env.batch_size,
+        max_length=rb_len
+    )
+
+    rb_observer = replay_buffer.add_batch
+
+    train_metrics = [
+        tf_metrics.NumberOfEpisodes(),
+        tf_metrics.EnvironmentSteps(),
+        tf_metrics.AverageReturnMetric(),
+        tf_metrics.AverageEpisodeLengthMetric()
+    ]
