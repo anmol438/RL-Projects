@@ -12,7 +12,8 @@ from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuf
 from tf_agents.metrics import tf_metrics
 from tf_agents.drivers.dynamic_step_driver import DynamicStepDriver
 from tf_agents.policies.random_tf_policy import RandomTFPolicy
-
+from tf_agents.utils.common import function
+from tf_agents.eval.metric_utils import log_metrics
 
 from tensorflow.keras.layers import Lambda
 from tensorflow.keras.optimizers.schedules import PolynomialDecay
@@ -20,6 +21,8 @@ from tensorflow.keras.losses import Huber
 from tensorflow.keras.optimizers import RMSprop
 
 from datetime import datetime
+import logging
+logging.getLogger().setLevel(logging.INFO)
 
 
 if __name__ == '__main__':
@@ -44,6 +47,7 @@ if __name__ == '__main__':
     train_step = tf.Variable(0) # collect_driver_steps*4 = ALE frames per train step
     discount_factor = 0.99
     batch_size = 64
+    training_iterations = 1000 # training_iterations*collect_driver_steps*4 number of ALE frames
 
     # Creating train env
 
@@ -144,6 +148,21 @@ if __name__ == '__main__':
         num_steps=2,
         num_parallel_calls=3
     ).prefetch(3)
+
+    # Time to train
+    collect_driver.run = function(collect_driver.run)
+    agent.train = function(agent.train)
+    
+    time_step = None
+    it = iter(dataset)
+    for _ in range(100):
+        time_step, __ = collect_driver.run(time_step)
+        trajectories, ___ = next(it)
+        train_loss = agent.train(trajectories)
+        
+        if train_step%10 == 0:
+            log_metrics(train_metrics, prefix=f'       Step : {train_step.numpy()}')
+            print(f'                 Loss : {train_loss.loss.numpy()}\n')
 
     end_time = datetime.now()
     print(f'======= Finished Training in {end_time-start_time} =======')
