@@ -27,7 +27,7 @@ import imageio
 logging.getLogger().setLevel(logging.INFO)
 
 
-def create_eval_video(test_gym_env, test_tf_env, policy, filename, num_episodes = 5, fps = 30, reset_after_life_lost = False):
+def create_eval_video(test_gym_env, test_tf_env, policy, filename, num_episodes = 5, fps = 30, fire_after_life_lost = False):
   filename = filename + ".mp4"
   with imageio.get_writer(filename, fps=fps) as video:
     for _ in range(num_episodes):
@@ -37,7 +37,7 @@ def create_eval_video(test_gym_env, test_tf_env, policy, filename, num_episodes 
         video.append_data(test_gym_env.render())
         while not time_step.is_last():
             curr_lives = test_gym_env.gym.ale.lives()
-            if reset_after_life_lost and (curr_lives < lives):
+            if fire_after_life_lost and (curr_lives < lives):
                 time_step = test_tf_env.step(1)
             else:
                 action_step = policy.action(time_step)
@@ -76,13 +76,23 @@ def create_eval_video_tf_fn(test_gym_env, test_tf_env, policy, filename, num_epi
             return time_step, lives
         time_step, lives = tf.while_loop(loop_cond, loop_body, [time_step, lives])
 
+def record_training():
+    if ((train_step + training_video_length - 1)%training_video_interval == 0 or len(render_data) != 0):
+        render_data.append(train_gym_env.render())
+
+        if len(render_data) >= training_video_length:
+            filename = f'training_video_step_{train_step.numpy()}' + ".mp4"
+            with imageio.get_writer(filename, fps=30) as video:
+                for data in render_data:
+                    video.append_data(data)
+            render_data.clear()
 
 if __name__ == '__main__':
     
     start_time = datetime.now()
 
     env_name = 'BreakoutNoFrameskip-v4'
-    max_ep_step = 1000 # max_ep_step*4 = ALE frames per episode
+    max_ep_step = 27000 # max_ep_step*4 = ALE frames per episode
 
     # for epsilon greedy
     decay_steps = 2500 # decay_steps*collect_driver_steps*4 = ALE frames for decaying
@@ -95,13 +105,18 @@ if __name__ == '__main__':
     rb_len = 10000
     collect_driver_steps = 4 # run 4 steps for each train step
     initial_driver_steps = 1000
-    target_update = 1
+    target_update = 20
     train_step = tf.Variable(0) # collect_driver_steps*4 = ALE frames per train step
     discount_factor = 0.99
     batch_size = 64
-    training_iterations = 100 # training_iterations*collect_driver_steps*4 number of ALE frames
+    training_iterations = 100000 # training_iterations*collect_driver_steps*4 number of ALE frames
+
     log_interval = training_iterations // 100
-    eval_interval = training_iterations // 1
+    eval_interval = training_iterations // 4
+
+    training_video_interval = training_iterations // 4
+    training_video_length = 500
+    record_training_flag = True # whether to record training or not
 
     # Creating train and test env
 
@@ -211,6 +226,7 @@ if __name__ == '__main__':
     ).prefetch(3)
 
     # Time to train
+    render_data = []
     collect_driver.run = function(collect_driver.run)
     agent.train = function(agent.train)
 
@@ -220,10 +236,13 @@ if __name__ == '__main__':
         time_step, __ = collect_driver.run(time_step)
         trajectories, ___ = next(it)
         train_loss = agent.train(trajectories)
-        
+
         if train_step%log_interval == 0:
             log_metrics(train_metrics, prefix=f'       Step : {train_step.numpy()}')
             print(f'                 Loss : {train_loss.loss.numpy()}\n')
+
+        if record_training_flag:
+            record_training()
 
         if train_step%eval_interval == 0:
             create_eval_video(
@@ -232,8 +251,8 @@ if __name__ == '__main__':
                 policy=agent.policy,
                 filename=f'eval_video_step_{train_step.numpy()}',
                 num_episodes=2,
-                fps=60,
-                reset_after_life_lost=True
+                fps=30,
+                fire_after_life_lost=True
             )
 
             # create_eval_video_tf_fn(
