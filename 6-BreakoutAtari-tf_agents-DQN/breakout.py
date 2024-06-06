@@ -22,7 +22,59 @@ from tensorflow.keras.optimizers import RMSprop
 
 from datetime import datetime
 import logging
+import imageio
+
 logging.getLogger().setLevel(logging.INFO)
+
+
+def create_eval_video(test_gym_env, test_tf_env, policy, filename, num_episodes = 5, fps = 30, reset_after_life_lost = False):
+  filename = filename + ".mp4"
+  with imageio.get_writer(filename, fps=fps) as video:
+    for _ in range(num_episodes):
+        time_step = test_tf_env.reset()
+        lives = test_gym_env.gym.ale.lives()
+        time_step = test_tf_env.step(1)
+        video.append_data(test_gym_env.render())
+        while not time_step.is_last():
+            curr_lives = test_gym_env.gym.ale.lives()
+            if reset_after_life_lost and (curr_lives < lives):
+                time_step = test_tf_env.step(1)
+            else:
+                action_step = policy.action(time_step)
+                time_step = test_tf_env.step(action_step.action)
+            lives = curr_lives
+            video.append_data(test_gym_env.render())
+
+# Tried the TF graph version
+def create_eval_video_tf_fn(test_gym_env, test_tf_env, policy, filename, num_episodes = 5, fps = 30):
+  filename = filename + ".mp4"
+  with imageio.get_writer(filename, fps=fps) as video:
+    for _ in range(num_episodes):
+        time_step = test_tf_env.reset()
+        lives = test_gym_env.gym.ale.lives()
+        time_step = test_tf_env.step(tf.constant([1],dtype='int64'))
+        video.append_data(test_gym_env.render())
+        loop_cond = lambda time_step, lives : tf.logical_not(time_step.is_last())
+        def loop_body(time_step, lives):
+            curr_lives = test_gym_env.gym.ale.lives()
+            def true_branch(time_step):
+                time_step = test_tf_env.step(tf.constant([1],dtype='int64'))
+                return time_step
+            def false_branch(time_step):
+                action_step = policy.action(time_step)
+                time_step = test_tf_env.step(action_step.action)
+                return time_step
+
+            time_step = tf.cond(
+               tf.less(curr_lives,lives),
+               lambda:true_branch(time_step),
+               lambda:false_branch(time_step)
+            )
+
+            lives = curr_lives
+            video.append_data(test_gym_env.render())
+            return time_step, lives
+        time_step, lives = tf.while_loop(loop_cond, loop_body, [time_step, lives])
 
 
 if __name__ == '__main__':
@@ -47,17 +99,26 @@ if __name__ == '__main__':
     train_step = tf.Variable(0) # collect_driver_steps*4 = ALE frames per train step
     discount_factor = 0.99
     batch_size = 64
-    training_iterations = 1000 # training_iterations*collect_driver_steps*4 number of ALE frames
+    training_iterations = 100 # training_iterations*collect_driver_steps*4 number of ALE frames
+    log_interval = training_iterations // 100
+    eval_interval = training_iterations // 1
 
-    # Creating train env
+    # Creating train and test env
 
     train_gym_env = suite_atari.load(
         env_name,
         max_episode_steps=max_ep_step,
         gym_env_wrappers=[AtariPreprocessing, FrameStack4]
     )
+    
+    test_gym_env = suite_atari.load(
+        env_name,
+        max_episode_steps=max_ep_step,
+        gym_env_wrappers=[AtariPreprocessing, FrameStack4]
+    )
 
     train_tf_env = TFPyEnvironment(train_gym_env)
+    test_tf_env = TFPyEnvironment(test_gym_env)
 
     # Create a Q network
 
@@ -152,17 +213,37 @@ if __name__ == '__main__':
     # Time to train
     collect_driver.run = function(collect_driver.run)
     agent.train = function(agent.train)
-    
+
     time_step = None
     it = iter(dataset)
-    for _ in range(100):
+    for _ in range(training_iterations):
         time_step, __ = collect_driver.run(time_step)
         trajectories, ___ = next(it)
         train_loss = agent.train(trajectories)
         
-        if train_step%10 == 0:
+        if train_step%log_interval == 0:
             log_metrics(train_metrics, prefix=f'       Step : {train_step.numpy()}')
             print(f'                 Loss : {train_loss.loss.numpy()}\n')
+
+        if train_step%eval_interval == 0:
+            create_eval_video(
+                test_gym_env=test_gym_env,
+                test_tf_env=test_tf_env,
+                policy=agent.policy,
+                filename=f'eval_video_step_{train_step.numpy()}',
+                num_episodes=2,
+                fps=60,
+                reset_after_life_lost=True
+            )
+
+            # create_eval_video_tf_fn(
+            #     test_gym_env=test_gym_env,
+            #     test_tf_env=test_tf_env,
+            #     policy=agent.policy,
+            #     filename=f'eval_video_step_{train_step.numpy()}',
+            #     num_episodes=2,
+            #     fps=60
+            # )
 
     end_time = datetime.now()
     print(f'======= Finished Training in {end_time-start_time} =======')
