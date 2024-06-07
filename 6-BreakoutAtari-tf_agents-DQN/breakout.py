@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import matplotlib.pyplot as plt
 
 from tf_agents.environments import suite_atari
 from tf_agents.environments.tf_py_environment import TFPyEnvironment
@@ -24,7 +25,6 @@ from tensorflow.keras.optimizers import RMSprop
 from datetime import datetime
 import imageio
 import logging
-import sys
 
 
 tf.config.run_functions_eagerly(False)
@@ -40,6 +40,7 @@ logging.basicConfig(level=logging.INFO,
                     ])
 
 def create_eval_video(test_gym_env, test_tf_env, policy, filename, num_episodes = 5, fps = 30, fire_after_life_lost = False):
+    logging.info(f'======= Evaluating agent and saving evaluation video at step {train_step.read_value()} =======')
     filename = filename + ".mp4"
     with imageio.get_writer(filename, fps=fps) as video:
         for _ in range(num_episodes):
@@ -93,6 +94,7 @@ def record_training():
         render_data.append(train_gym_env.render())
 
         if len(render_data) >= training_video_length:
+            logging.info(f'======= Saving training video at step {train_step.read_value()} =======')
             filename = f'training_video_step_{train_step.read_value()}' + ".mp4"
             with imageio.get_writer(filename, fps=30) as video:
                 for data in render_data:
@@ -107,33 +109,34 @@ if __name__ == '__main__':
     max_ep_step = 27000 # max_ep_step*4 = ALE frames per episode
 
     # for epsilon greedy
-    decay_steps = 2500 # decay_steps*collect_driver_steps*4 = ALE frames for decaying
+    decay_steps = 250000 # decay_steps*collect_driver_steps*4 = ALE frames for decaying
 
     # for optimizer
     lr = 1e-4 # size of the steps in gradient descent
     rho = 0.95 # decay rate of the moving average of squared gradients
     epsilon = 1e-7 # Improves numerical stability
 
-    rb_len = 10000
+    rb_len = 100000
     collect_driver_steps = 4 # run 4 steps for each train step
-    initial_driver_steps = 1000
-    target_update = 20
+    initial_driver_steps = 10000
+    target_update = 2000
     train_step = tf.Variable(0) # collect_driver_steps*4 = ALE frames per train step
     discount_factor = 0.99
     batch_size = 64
-    max_training_iterations = 20000 # training_iterations*collect_driver_steps*4 number of ALE frames
-    current_training_iteration = 10000
+    max_training_iterations = 10000000 # training_iterations*collect_driver_steps*4 number of ALE frames
+    current_training_iteration = 1000000
 
     log_interval = current_training_iteration // 100
     eval_interval = max_training_iterations // 20
 
     training_video_interval = max_training_iterations // 20
-    training_video_length = 250
+    training_video_length = 1000
     record_training_flag = True # whether to record training or not
 
     checkpoint_interval = current_training_iteration // 4
 
     render_data = []
+    avg_returns = []
 
     # Creating train and test env
 
@@ -276,12 +279,13 @@ if __name__ == '__main__':
         initial_driver.run()
 
         time_step = train_tf_env.reset()
-        for _ in range(max_training_iterations):
+        for _ in range(current_training_iteration):
             time_step, __ = collect_driver.run(time_step)
             trajectories, ___ = next(it)
             train_loss = agent.train(trajectories)
 
             if train_step%log_interval == 0:
+                avg_returns.append(train_metrics[2].result().numpy())
                 log_metrics(train_metrics, prefix=f'\n         Step : {train_step.read_value()}\n         Loss : {train_loss.loss}')
                 
             if record_training_flag:
@@ -308,10 +312,17 @@ if __name__ == '__main__':
                 # )
 
             if train_step%checkpoint_interval == 0:
+                logging.info(f'======= Saving checkpoint at step {train_step.read_value()} =======')
                 train_checkpointer.save(train_step)
 
-            
+        logging.info(f'======= Saving policy at step {train_step.read_value()} =======')
         policy_saver.save('./policy') # load the trained policy with tf_agents.policies.policy_loader.load
+
+        plt.plot(range(0, current_training_iteration, log_interval), avg_returns)
+
+        plt.xlabel('Iterations')
+        plt.ylabel('Average Return')
+        plt.savefig(f'Average_return_{train_step.read_value()}.png')
 
         end_time = datetime.now()
         logging.info(f'======= Finished Training in {end_time-start_time} =======')
