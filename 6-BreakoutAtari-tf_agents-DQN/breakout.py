@@ -12,7 +12,7 @@ from tf_agents.replay_buffers.tf_uniform_replay_buffer import TFUniformReplayBuf
 from tf_agents.metrics import tf_metrics
 from tf_agents.drivers.dynamic_step_driver import DynamicStepDriver
 from tf_agents.policies.random_tf_policy import RandomTFPolicy
-from tf_agents.utils.common import function
+from tf_agents.utils.common import function, Checkpointer
 from tf_agents.eval.metric_utils import log_metrics
 
 from tensorflow.keras.layers import Lambda
@@ -20,12 +20,23 @@ from tensorflow.keras.optimizers.schedules import PolynomialDecay
 from tensorflow.keras.losses import Huber
 from tensorflow.keras.optimizers import RMSprop
 
+import imageio
 from datetime import datetime
 import logging
-import imageio
+import warnings
 
+tf.config.run_functions_eagerly(False)
 logging.getLogger().setLevel(logging.INFO)
+# warnings.filterwarnings('ignore')
 
+# Configure logging to log to both console and file
+log_file = 'training_log.txt'
+logging.basicConfig(level=logging.INFO, 
+                    format='%(asctime)s - %(levelname)s - %(message)s \n',
+                    handlers=[
+                        logging.FileHandler(log_file),
+                        logging.StreamHandler()
+                    ])
 
 def create_eval_video(test_gym_env, test_tf_env, policy, filename, num_episodes = 5, fps = 30, fire_after_life_lost = False):
   filename = filename + ".mp4"
@@ -81,7 +92,7 @@ def record_training():
         render_data.append(train_gym_env.render())
 
         if len(render_data) >= training_video_length:
-            filename = f'training_video_step_{train_step.numpy()}' + ".mp4"
+            filename = f'training_video_step_{train_step.read_value()}' + ".mp4"
             with imageio.get_writer(filename, fps=30) as video:
                 for data in render_data:
                     video.append_data(data)
@@ -109,14 +120,16 @@ if __name__ == '__main__':
     train_step = tf.Variable(0) # collect_driver_steps*4 = ALE frames per train step
     discount_factor = 0.99
     batch_size = 64
-    training_iterations = 100000 # training_iterations*collect_driver_steps*4 number of ALE frames
+    training_iterations = 10000 # training_iterations*collect_driver_steps*4 number of ALE frames
 
     log_interval = training_iterations // 100
     eval_interval = training_iterations // 4
 
     training_video_interval = training_iterations // 4
-    training_video_length = 500
+    training_video_length = 250
     record_training_flag = True # whether to record training or not
+
+    checkpoint_interval = 1000
 
     # Creating train and test env
 
@@ -224,23 +237,43 @@ if __name__ == '__main__':
         num_steps=2,
         num_parallel_calls=3
     ).prefetch(3)
+    it = iter(dataset)
 
     # Time to train
     render_data = []
     collect_driver.run = function(collect_driver.run)
     agent.train = function(agent.train)
 
-    time_step = None
-    it = iter(dataset)
+    # Load any Checkpointer if it exist
+
+    train_checkpointer = Checkpointer(
+        ckpt_dir='./checkpointer',
+        max_to_keep=1,
+        agent=agent,
+        policy=agent.policy,
+        replay_buffer=replay_buffer,
+        global_step=train_step,
+        train_metrics=train_metrics
+
+    )
+    if train_checkpointer.checkpoint_exists:
+        train_checkpointer.initialize_or_restore()
+        logging.info(f"Restored training from last checkpoint at step {train_step.read_value()}")
+    else:
+        logging.info("Starting training from scratch")
+
+    time_step = train_tf_env.reset()
     for _ in range(training_iterations):
         time_step, __ = collect_driver.run(time_step)
         trajectories, ___ = next(it)
         train_loss = agent.train(trajectories)
 
-        if train_step%log_interval == 0:
-            log_metrics(train_metrics, prefix=f'       Step : {train_step.numpy()}')
-            print(f'                 Loss : {train_loss.loss.numpy()}\n')
+        if train_step%checkpoint_interval == 0:
+            train_checkpointer.save(train_step)
 
+        if train_step%log_interval == 0:
+            log_metrics(train_metrics, prefix=f'\n         Step : {train_step.read_value()}\n         Loss : {train_loss.loss}')
+            
         if record_training_flag:
             record_training()
 
@@ -249,7 +282,7 @@ if __name__ == '__main__':
                 test_gym_env=test_gym_env,
                 test_tf_env=test_tf_env,
                 policy=agent.policy,
-                filename=f'eval_video_step_{train_step.numpy()}',
+                filename=f'eval_video_step_{train_step.read_value()}',
                 num_episodes=2,
                 fps=30,
                 fire_after_life_lost=True
@@ -259,10 +292,10 @@ if __name__ == '__main__':
             #     test_gym_env=test_gym_env,
             #     test_tf_env=test_tf_env,
             #     policy=agent.policy,
-            #     filename=f'eval_video_step_{train_step.numpy()}',
+            #     filename=f'eval_video_step_{train_step.read_value()}',
             #     num_episodes=2,
             #     fps=60
             # )
 
     end_time = datetime.now()
-    print(f'======= Finished Training in {end_time-start_time} =======')
+    logging.info(f'======= Finished Training in {end_time-start_time} =======')
