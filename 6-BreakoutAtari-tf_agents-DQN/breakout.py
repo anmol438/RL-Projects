@@ -21,72 +21,72 @@ from tensorflow.keras.optimizers.schedules import PolynomialDecay
 from tensorflow.keras.losses import Huber
 from tensorflow.keras.optimizers import RMSprop
 
-import imageio
 from datetime import datetime
+import imageio
 import logging
-import warnings
+import sys
+
 
 tf.config.run_functions_eagerly(False)
 logging.getLogger().setLevel(logging.INFO)
-# warnings.filterwarnings('ignore')
 
 # Configure logging to log to both console and file
 log_file = 'training_log.txt'
 logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(levelname)s - %(message)s \n',
+                    format='%(asctime)s - %(levelname)s\n%(message)s \n',
                     handlers=[
                         logging.FileHandler(log_file),
                         logging.StreamHandler()
                     ])
 
 def create_eval_video(test_gym_env, test_tf_env, policy, filename, num_episodes = 5, fps = 30, fire_after_life_lost = False):
-  filename = filename + ".mp4"
-  with imageio.get_writer(filename, fps=fps) as video:
-    for _ in range(num_episodes):
-        time_step = test_tf_env.reset()
-        lives = test_gym_env.gym.ale.lives()
-        time_step = test_tf_env.step(1)
-        video.append_data(test_gym_env.render())
-        while not time_step.is_last():
-            curr_lives = test_gym_env.gym.ale.lives()
-            if fire_after_life_lost and (curr_lives < lives):
-                time_step = test_tf_env.step(1)
-            else:
-                action_step = policy.action(time_step)
-                time_step = test_tf_env.step(action_step.action)
-            lives = curr_lives
+    filename = filename + ".mp4"
+    with imageio.get_writer(filename, fps=fps) as video:
+        for _ in range(num_episodes):
+            time_step = test_tf_env.reset()
+            lives = test_gym_env.gym.ale.lives()
+            time_step = test_tf_env.step(1)
             video.append_data(test_gym_env.render())
+            while not time_step.is_last():
+                curr_lives = test_gym_env.gym.ale.lives()
+                if fire_after_life_lost and (curr_lives < lives):
+                    time_step = test_tf_env.step(1)
+                else:
+                    action_step = policy.action(time_step)
+                    time_step = test_tf_env.step(action_step.action)
+                lives = curr_lives
+                video.append_data(test_gym_env.render())
 
 # Tried the TF graph version
 def create_eval_video_tf_fn(test_gym_env, test_tf_env, policy, filename, num_episodes = 5, fps = 30):
-  filename = filename + ".mp4"
-  with imageio.get_writer(filename, fps=fps) as video:
-    for _ in range(num_episodes):
-        time_step = test_tf_env.reset()
-        lives = test_gym_env.gym.ale.lives()
-        time_step = test_tf_env.step(tf.constant([1],dtype='int64'))
-        video.append_data(test_gym_env.render())
-        loop_cond = lambda time_step, lives : tf.logical_not(time_step.is_last())
-        def loop_body(time_step, lives):
-            curr_lives = test_gym_env.gym.ale.lives()
-            def true_branch(time_step):
-                time_step = test_tf_env.step(tf.constant([1],dtype='int64'))
-                return time_step
-            def false_branch(time_step):
-                action_step = policy.action(time_step)
-                time_step = test_tf_env.step(action_step.action)
-                return time_step
-
-            time_step = tf.cond(
-               tf.less(curr_lives,lives),
-               lambda:true_branch(time_step),
-               lambda:false_branch(time_step)
-            )
-
-            lives = curr_lives
+    filename = filename + ".mp4"
+    with imageio.get_writer(filename, fps=fps) as video:
+        for _ in range(num_episodes):
+            time_step = test_tf_env.reset()
+            lives = test_gym_env.gym.ale.lives()
+            time_step = test_tf_env.step(tf.constant([1],dtype='int64'))
             video.append_data(test_gym_env.render())
-            return time_step, lives
-        time_step, lives = tf.while_loop(loop_cond, loop_body, [time_step, lives])
+            loop_cond = lambda time_step, lives : tf.logical_not(time_step.is_last())
+            def loop_body(time_step, lives):
+                curr_lives = test_gym_env.gym.ale.lives()
+                def true_branch(time_step):
+                    time_step = test_tf_env.step(tf.constant([1],dtype='int64'))
+                    return time_step
+                def false_branch(time_step):
+                    action_step = policy.action(time_step)
+                    time_step = test_tf_env.step(action_step.action)
+                    return time_step
+
+                time_step = tf.cond(
+                    tf.less(curr_lives,lives),
+                    lambda:true_branch(time_step),
+                    lambda:false_branch(time_step)
+                )
+
+                lives = curr_lives
+                video.append_data(test_gym_env.render())
+                return time_step, lives
+            time_step, lives = tf.while_loop(loop_cond, loop_body, [time_step, lives])
 
 def record_training():
     if ((train_step + training_video_length - 1)%training_video_interval == 0 or len(render_data) != 0):
@@ -121,16 +121,17 @@ if __name__ == '__main__':
     train_step = tf.Variable(0) # collect_driver_steps*4 = ALE frames per train step
     discount_factor = 0.99
     batch_size = 64
-    training_iterations = 100 # training_iterations*collect_driver_steps*4 number of ALE frames
+    max_training_iterations = 20000 # training_iterations*collect_driver_steps*4 number of ALE frames
+    current_training_iteration = 10000
 
-    log_interval = training_iterations // 100
-    eval_interval = training_iterations // 4
+    log_interval = current_training_iteration // 100
+    eval_interval = max_training_iterations // 20
 
-    training_video_interval = training_iterations // 4
+    training_video_interval = max_training_iterations // 20
     training_video_length = 250
     record_training_flag = True # whether to record training or not
 
-    checkpoint_interval = 100
+    checkpoint_interval = current_training_iteration // 4
 
     render_data = []
 
@@ -244,69 +245,76 @@ if __name__ == '__main__':
 
     )
     if train_checkpointer.checkpoint_exists:
-        train_checkpointer.initialize_or_restore()
-        logging.info(f"Restored training from last checkpoint at step {train_step.read_value()}")
-        initial_collect_policy = agent.collect_policy
-    else:
-        logging.info("Starting training from scratch")
-        initial_collect_policy = RandomTFPolicy(train_tf_env.time_step_spec(), train_tf_env.action_spec())
+        train_checkpointer.initialize_or_restore().expect_partial()
 
-    # Create a policy saver
-    policy_saver = PolicySaver(agent.policy)
+    if train_step < max_training_iterations:
+        if train_step == 0: # training from scratch
+            logging.info("Starting training from scratch")
+            initial_collect_policy = RandomTFPolicy(train_tf_env.time_step_spec(), train_tf_env.action_spec())
 
-    # Create a driver to pre populate the replay buffer before training
+        else: # restored from a checkpoint
+            logging.info(f"Restored training from last checkpoint at step {train_step.read_value()}")
+            initial_collect_policy = agent.collect_policy
+    
+        # Create a policy saver
+        policy_saver = PolicySaver(agent.policy)
 
-    initial_driver = DynamicStepDriver(
-        train_tf_env,
-        initial_collect_policy,
-        observers=[rb_observer],
-        num_steps=initial_driver_steps
-    )
+        # Create a driver to pre populate the replay buffer before training
 
-    # Time to train
-    collect_driver.run = function(collect_driver.run)
-    initial_driver.run = function(initial_driver.run)
-    agent.train = function(agent.train)
+        initial_driver = DynamicStepDriver(
+            train_tf_env,
+            initial_collect_policy,
+            observers=[rb_observer],
+            num_steps=initial_driver_steps
+        )
 
-    initial_driver.run()
+        # Time to train
+        collect_driver.run = function(collect_driver.run)
+        initial_driver.run = function(initial_driver.run)
+        agent.train = function(agent.train)
 
-    time_step = train_tf_env.reset()
-    for _ in range(training_iterations):
-        time_step, __ = collect_driver.run(time_step)
-        trajectories, ___ = next(it)
-        train_loss = agent.train(trajectories)
+        initial_driver.run()
 
-        if train_step%log_interval == 0:
-            log_metrics(train_metrics, prefix=f'\n         Step : {train_step.read_value()}\n         Loss : {train_loss.loss}')
+        time_step = train_tf_env.reset()
+        for _ in range(max_training_iterations):
+            time_step, __ = collect_driver.run(time_step)
+            trajectories, ___ = next(it)
+            train_loss = agent.train(trajectories)
+
+            if train_step%log_interval == 0:
+                log_metrics(train_metrics, prefix=f'\n         Step : {train_step.read_value()}\n         Loss : {train_loss.loss}')
+                
+            if record_training_flag:
+                record_training()
+
+            if train_step%eval_interval == 0:
+                create_eval_video(
+                    test_gym_env=test_gym_env,
+                    test_tf_env=test_tf_env,
+                    policy=agent.policy,
+                    filename=f'eval_video_step_{train_step.read_value()}',
+                    num_episodes=2,
+                    fps=30,
+                    fire_after_life_lost=True
+                )
+
+                # create_eval_video_tf_fn(
+                #     test_gym_env=test_gym_env,
+                #     test_tf_env=test_tf_env,
+                #     policy=agent.policy,
+                #     filename=f'eval_video_step_{train_step.read_value()}',
+                #     num_episodes=2,
+                #     fps=60
+                # )
+
+            if train_step%checkpoint_interval == 0:
+                train_checkpointer.save(train_step)
+
             
-        if record_training_flag:
-            record_training()
+        policy_saver.save('./policy') # load the trained policy with tf_agents.policies.policy_loader.load
 
-        if train_step%eval_interval == 0:
-            create_eval_video(
-                test_gym_env=test_gym_env,
-                test_tf_env=test_tf_env,
-                policy=agent.policy,
-                filename=f'eval_video_step_{train_step.read_value()}',
-                num_episodes=2,
-                fps=30,
-                fire_after_life_lost=True
-            )
-
-            # create_eval_video_tf_fn(
-            #     test_gym_env=test_gym_env,
-            #     test_tf_env=test_tf_env,
-            #     policy=agent.policy,
-            #     filename=f'eval_video_step_{train_step.read_value()}',
-            #     num_episodes=2,
-            #     fps=60
-            # )
-
-        if train_step%checkpoint_interval == 0:
-            train_checkpointer.save(train_step)
-
-        
-    policy_saver.save('./policy') # load the trained policy with tf_agents.policies.policy_loader.load
-
-    end_time = datetime.now()
-    logging.info(f'======= Finished Training in {end_time-start_time} =======')
+        end_time = datetime.now()
+        logging.info(f'======= Finished Training in {end_time-start_time} =======')
+    
+    else: # if train step exceed max training iterations
+        logging.info("Training already completed. Load the checkpoint or policy to evaluate")
