@@ -120,7 +120,7 @@ if __name__ == '__main__':
     train_step = tf.Variable(0) # collect_driver_steps*4 = ALE frames per train step
     discount_factor = 0.99
     batch_size = 64
-    training_iterations = 10000 # training_iterations*collect_driver_steps*4 number of ALE frames
+    training_iterations = 100 # training_iterations*collect_driver_steps*4 number of ALE frames
 
     log_interval = training_iterations // 100
     eval_interval = training_iterations // 4
@@ -129,7 +129,7 @@ if __name__ == '__main__':
     training_video_length = 250
     record_training_flag = True # whether to record training or not
 
-    checkpoint_interval = 1000
+    checkpoint_interval = 100
 
     # Creating train and test env
 
@@ -210,18 +210,7 @@ if __name__ == '__main__':
         tf_metrics.AverageEpisodeLengthMetric()
     ]
 
-    # Create a driver to pre populate the replay buffer
-
-    initial_driver = DynamicStepDriver(
-        train_tf_env,
-        RandomTFPolicy(train_tf_env.time_step_spec(), train_tf_env.action_spec()),
-        observers=[rb_observer],
-        num_steps=initial_driver_steps
-    )
-
-    initial_driver.run()
-
-    # Create the main collect driver
+    # Create the main collect driver to run during training
 
     collect_driver = DynamicStepDriver(
         train_tf_env,
@@ -251,7 +240,7 @@ if __name__ == '__main__':
         max_to_keep=1,
         agent=agent,
         policy=agent.policy,
-        replay_buffer=replay_buffer,
+        # replay_buffer=replay_buffer, # removed because of very large storage size
         global_step=train_step,
         train_metrics=train_metrics
 
@@ -259,8 +248,22 @@ if __name__ == '__main__':
     if train_checkpointer.checkpoint_exists:
         train_checkpointer.initialize_or_restore()
         logging.info(f"Restored training from last checkpoint at step {train_step.read_value()}")
+        initial_collect_policy = agent.collect_policy
     else:
         logging.info("Starting training from scratch")
+        initial_collect_policy = RandomTFPolicy(train_tf_env.time_step_spec(), train_tf_env.action_spec())
+
+    
+    # Create a driver to pre populate the replay buffer before training
+
+    initial_driver = DynamicStepDriver(
+        train_tf_env,
+        initial_collect_policy,
+        observers=[rb_observer],
+        num_steps=initial_driver_steps
+    )
+    initial_driver.run()
+
 
     time_step = train_tf_env.reset()
     for _ in range(training_iterations):
