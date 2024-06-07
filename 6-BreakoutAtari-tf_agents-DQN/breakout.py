@@ -14,6 +14,7 @@ from tf_agents.drivers.dynamic_step_driver import DynamicStepDriver
 from tf_agents.policies.random_tf_policy import RandomTFPolicy
 from tf_agents.utils.common import function, Checkpointer
 from tf_agents.eval.metric_utils import log_metrics
+from tf_agents.policies.policy_saver import PolicySaver
 
 from tensorflow.keras.layers import Lambda
 from tensorflow.keras.optimizers.schedules import PolynomialDecay
@@ -131,6 +132,8 @@ if __name__ == '__main__':
 
     checkpoint_interval = 100
 
+    render_data = []
+
     # Creating train and test env
 
     train_gym_env = suite_atari.load(
@@ -228,15 +231,10 @@ if __name__ == '__main__':
     ).prefetch(3)
     it = iter(dataset)
 
-    # Time to train
-    render_data = []
-    collect_driver.run = function(collect_driver.run)
-    agent.train = function(agent.train)
-
     # Load any Checkpointer if it exist
 
     train_checkpointer = Checkpointer(
-        ckpt_dir='./checkpointer',
+        ckpt_dir='./checkpoint',
         max_to_keep=1,
         agent=agent,
         policy=agent.policy,
@@ -253,7 +251,9 @@ if __name__ == '__main__':
         logging.info("Starting training from scratch")
         initial_collect_policy = RandomTFPolicy(train_tf_env.time_step_spec(), train_tf_env.action_spec())
 
-    
+    # Create a policy saver
+    policy_saver = PolicySaver(agent.policy)
+
     # Create a driver to pre populate the replay buffer before training
 
     initial_driver = DynamicStepDriver(
@@ -262,17 +262,19 @@ if __name__ == '__main__':
         observers=[rb_observer],
         num_steps=initial_driver_steps
     )
-    initial_driver.run()
 
+    # Time to train
+    collect_driver.run = function(collect_driver.run)
+    initial_driver.run = function(initial_driver.run)
+    agent.train = function(agent.train)
+
+    initial_driver.run()
 
     time_step = train_tf_env.reset()
     for _ in range(training_iterations):
         time_step, __ = collect_driver.run(time_step)
         trajectories, ___ = next(it)
         train_loss = agent.train(trajectories)
-
-        if train_step%checkpoint_interval == 0:
-            train_checkpointer.save(train_step)
 
         if train_step%log_interval == 0:
             log_metrics(train_metrics, prefix=f'\n         Step : {train_step.read_value()}\n         Loss : {train_loss.loss}')
@@ -299,6 +301,12 @@ if __name__ == '__main__':
             #     num_episodes=2,
             #     fps=60
             # )
+
+        if train_step%checkpoint_interval == 0:
+            train_checkpointer.save(train_step)
+
+        
+    policy_saver.save('./policy') # load the trained policy with tf_agents.policies.policy_loader.load
 
     end_time = datetime.now()
     logging.info(f'======= Finished Training in {end_time-start_time} =======')
