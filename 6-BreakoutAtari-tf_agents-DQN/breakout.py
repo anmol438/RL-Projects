@@ -116,9 +116,9 @@ if __name__ == '__main__':
     rho = 0.95 # decay rate of the moving average of squared gradients
     epsilon = 1e-7 # Improves numerical stability
 
-    rb_len = 300000
+    rb_len = 1000000
     collect_driver_steps = 4 # run 4 steps for each train step
-    initial_driver_steps = 10000
+    initial_driver_steps = 20000
     target_update = 2000
     train_step = tf.Variable(0) # collect_driver_steps*4 = ALE frames per train step
     last_train_step = train_step.value() # stores train_step from last checkpoint if it exist
