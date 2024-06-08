@@ -116,24 +116,27 @@ if __name__ == '__main__':
     rho = 0.95 # decay rate of the moving average of squared gradients
     epsilon = 1e-7 # Improves numerical stability
 
-    rb_len = 100000
+    rb_len = 300000
     collect_driver_steps = 4 # run 4 steps for each train step
     initial_driver_steps = 10000
     target_update = 2000
     train_step = tf.Variable(0) # collect_driver_steps*4 = ALE frames per train step
+    last_train_step = train_step.value() # stores train_step from last checkpoint if it exist
     discount_factor = 0.99
     batch_size = 64
-    max_training_iterations = 10000000 # training_iterations*collect_driver_steps*4 number of ALE frames
-    current_training_iteration = 1000000
+    max_training_iterations = 10000000 # = total number of iterations for training. max_training_iterations*collect_driver_steps*4 number of ALE frames
+    segmented_iterations = 500000 # dividing the total iterations to run in small segments. e.g. 1 segment = 1/20 of total iterations, take around 8hrs on my system
+    n_segment_runs = 1 # run a segmented iteration this number of times ( better to be greater than one )
+    iterations = n_segment_runs*segmented_iterations # the train loop will also add any number of iterations left from from previous checkpoint because of any failure
 
-    log_interval = current_training_iteration // 100
-    eval_interval = max_training_iterations // 20
+    log_interval = segmented_iterations // 50
+    eval_interval = segmented_iterations // 1
 
-    training_video_interval = max_training_iterations // 20
+    training_video_interval = segmented_iterations // 1
     training_video_length = 1000
     record_training_flag = True # whether to record training or not
 
-    checkpoint_interval = current_training_iteration // 4
+    checkpoint_interval = segmented_iterations // 5
 
     render_data = []
     avg_returns = []
@@ -257,6 +260,7 @@ if __name__ == '__main__':
 
         else: # restored from a checkpoint
             logging.info(f"Restored training from last checkpoint at step {train_step.read_value()}")
+            last_train_step = train_step.value()
             initial_collect_policy = agent.collect_policy
     
         # Create a policy saver
@@ -279,7 +283,8 @@ if __name__ == '__main__':
         initial_driver.run()
 
         time_step = train_tf_env.reset()
-        for _ in range(current_training_iteration):
+        tot_iteration_to_loop = iterations - last_train_step%(-segmented_iterations) # second term for including any remaining iterations from previous checkpoint
+        for iteration in range(tot_iteration_to_loop):
             time_step, __ = collect_driver.run(time_step)
             trajectories, ___ = next(it)
             train_loss = agent.train(trajectories)
@@ -315,17 +320,26 @@ if __name__ == '__main__':
                 logging.info(f'======= Saving checkpoint at step {train_step.read_value()} =======')
                 train_checkpointer.save(train_step)
 
+            if train_step%segmented_iterations == 0:
+                plt.plot(range(last_train_step, train_step.value(), log_interval), avg_returns)
+                plt.xlabel('Iterations')
+                plt.ylabel('Average Return')
+                plt.savefig(f'Average_return_{train_step.read_value()}.png')
+                plt.clf()
+
+                avg_returns.clear()
+                last_train_step = train_step.value()
+                logging.info(f'======= A segment completed at step {train_step.read_value()} =======')
+
+            if train_step>=max_training_iterations:
+                break
+            
         logging.info(f'======= Saving policy at step {train_step.read_value()} =======')
         policy_saver.save('./policy') # load the trained policy with tf_agents.policies.policy_loader.load
 
-        plt.plot(range(0, current_training_iteration, log_interval), avg_returns)
-
-        plt.xlabel('Iterations')
-        plt.ylabel('Average Return')
-        plt.savefig(f'Average_return_{train_step.read_value()}.png')
 
         end_time = datetime.now()
-        logging.info(f'======= Finished Training in {end_time-start_time} =======')
+        logging.info(f'========================================================== Finished {iteration+1} Training iteration in: {end_time-start_time}. Total training steps: {train_step.read_value()} ==========================================================')
     
     else: # if train step exceed max training iterations
         logging.info("Training already completed. Load the checkpoint or policy to evaluate")
