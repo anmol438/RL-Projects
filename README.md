@@ -116,16 +116,24 @@ https://github.com/anmol438/RL-Projects/assets/50985412/c4608f7f-0065-4d5a-b531-
 * Average Return  
   ![img](./6-BreakoutAtari-tf_agents-DQN/Average_return_1000000.png)
 * Training Video
+
 https://github.com/anmol438/RL-Projects/assets/50985412/74b2dc1a-5eb9-4690-af02-82518a74dce8
+
 * Agent Evaluation Video:
+
 https://github.com/anmol438/RL-Projects/assets/50985412/97ecb9df-cc00-4f01-96d3-c86a10f0c29e
+
 #### At 4 million steps:
 * Average Return
   ![img](./6-BreakoutAtari-tf_agents-DQN/Average_return_4000000.png)
 * Training Video
+
 https://github.com/anmol438/RL-Projects/assets/50985412/92ee5f39-a004-4f1f-95fc-2d117377397c
+
 * Agent Evaluation Video:
+
 https://github.com/anmol438/RL-Projects/assets/50985412/5276754e-2999-4d45-af98-8fe42de77105
+
 
 * The agent started learning from the initial phase that it needs to move the paddle to make the ball break the bricks.
 * But after a long training it is fascinating to see that the agent is achieving superhuman capability by learning that it can dig up a tunnel through the brick walls for the maximum score and do nothing when the ball goes above the brick walls.
