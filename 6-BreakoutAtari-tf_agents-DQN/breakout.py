@@ -126,14 +126,14 @@ if __name__ == '__main__':
     batch_size = 64
     max_training_iterations = 10000000 # = total number of iterations for training. max_training_iterations*collect_driver_steps*4 number of ALE frames
     segmented_iterations = 500000 # dividing the total iterations to run in small segments. e.g. 1 segment = 1/20 of total iterations, take around 8hrs on my system
-    n_segment_runs = 1 # run a segmented iteration this number of times ( better to be greater than one )
+    n_segment_runs = 6 # run a segmented iteration this number of times ( better to be greater than one )
     iterations = n_segment_runs*segmented_iterations # the train loop will also add any number of iterations left from from previous checkpoint because of any failure
 
     log_interval = segmented_iterations // 50
     eval_interval = segmented_iterations // 1
 
     training_video_interval = segmented_iterations // 1
-    training_video_length = 1000
+    training_video_length = 2000
     record_training_flag = True # whether to record training or not
 
     checkpoint_interval = segmented_iterations // 5
