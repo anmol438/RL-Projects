@@ -124,7 +124,7 @@ https://github.com/anmol438/RL-Projects/assets/50985412/74b2dc1a-5eb9-4690-af02-
 https://github.com/anmol438/RL-Projects/assets/50985412/97ecb9df-cc00-4f01-96d3-c86a10f0c29e
 
 #### At 4 million steps:
-* Average Return
+* Average Return  
   ![img](./6-BreakoutAtari-tf_agents-DQN/Average_return_4000000.png)
 * Training Video
 
