@@ -104,4 +104,29 @@ https://github.com/anmol438/RL-Projects/assets/50985412/c4608f7f-0065-4d5a-b531-
 * For efficient training, the grayscaled and framestacked environment is good. After preprocessing it looks like this:  
   ![img](./6-BreakoutAtari-tf_agents-DQN/stacked_env.png)
 * Four colours represent four consecutive different frames.
-  
+* The **Q-network** is set up with a normalized layer, convolutional layer and then a dense layer.
+* This network is feed in the **DQN agent** with **epsilon greedy policy**.
+* **Dynamic Step Driver** is used to explore the environment and collect trajectories to **replay buffer**.
+* To make the agent perform excellently, it took around 4 days of training for **4 million** steps.
+* I also used the **Checkpoint** which stores the trained state to the hard disk. In case something wrong happens during the training, it can be restores from the last checkpoint.
+* **Policy Saver** can be used to play in the environment with the trained agent's policy.
+* I regularly observed the training and also evaluated the agent during the training.
+* Below are the observations:
+#### Initial Phase:
+* Average Return  
+  ![img](./6-BreakoutAtari-tf_agents-DQN/Average_return_1000000.png)
+* Training Video  
+  <video controls src="6-BreakoutAtari-tf_agents-DQN/training_video_step_500000.mp4" title="Title"></video>
+* Agent Evaluation Video:  
+  <video controls src="6-BreakoutAtari-tf_agents-DQN/eval_video_step_500000.mp4" title="Title"></video>
+#### At 4 million steps:
+* Average Return  
+  ![img](./6-BreakoutAtari-tf_agents-DQN/Average_return_4000000.png)
+* Training Video  
+  <video controls src="6-BreakoutAtari-tf_agents-DQN/training_video_step_4000000.mp4" title="Title"></video>
+* Agent Evaluation Video:  
+  <video controls src="6-BreakoutAtari-tf_agents-DQN/eval_video_step_4000000.mp4" title="Title"></video>
+
+* The agent started learning from initial phase that it needs to move the paddle to make the ball break the bricks.
+* But after a long training it is fascinating to see that the agent is achieving superhuman capability by learning that it can dig up a tunnel through the brick walls for the maximum score and do nothing when the ball goes above the brick walls.
+* It's still need more training to 100% break the bricks.
