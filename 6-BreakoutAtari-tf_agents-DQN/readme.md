@@ -1,4 +1,4 @@
-**TF Agents** package support gym upto version **gym 0.23.0**. And because the gym management has move to **Farama Foundation**, there are no updates on gym so they can be errors because of dependencies.  
+**TF Agents** package support gym upto version **gym 0.23.0**. And because the gym management has now handled by **Farama Foundation** as **gymnasium**, there will be no updates in gym so there can be errors because of dependencies.  
 To avoid any incompatibility because of package dependencies please install compatible versions of packages to work with Atari and Tf agents. After lots of errors and testing, I found out these versions to be compatible:
 
 python : 3.7.16  
