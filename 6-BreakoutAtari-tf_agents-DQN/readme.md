@@ -8,3 +8,6 @@ gym or gym[atari]: 0.23.0
 gym[accept-rom-license] : 0.6.1 (No need to specify version while installing)  
 ale-py : 0.7.5 (No need to install separately)  
 opencv-python : 4.10.0.82 (No need to specify version while installing)  
+
+I have a added a yml environment file to create a environment with all the packages and versions required.  
+To create the environment, run `conda env create --file atari_breakout_env.yml` and then run `conda activate atari-breakout`
