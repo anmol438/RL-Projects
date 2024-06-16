@@ -97,6 +97,7 @@ https://github.com/anmol438/RL-Projects/assets/50985412/c4608f7f-0065-4d5a-b531-
 
 ## 6. Atari - Breakout Env
 
+* Using the DeepMind paper from 2013 (https://homl.info/dqn) and the TensorFlow's training architecture implemented in the TF-Agent package, I trained a DQN agent to play the Atari-Breakout game (https://gymnasium.farama.org/environments/atari/breakout/).
 * This env is not as simple as CartPole env. So I will explain it in a little detail.
 * The Atari env needs to be installed separately for the gym. Please read **"./6-BreakoutAtari-tf_agents-DQN/readme.md"** for installation help.
 * The raw Breakout env looks like this:  
@@ -135,6 +136,6 @@ https://github.com/anmol438/RL-Projects/assets/50985412/92ee5f39-a004-4f1f-95fc-
 https://github.com/anmol438/RL-Projects/assets/50985412/5276754e-2999-4d45-af98-8fe42de77105
 
 
-* The agent started learning from the initial phase that it needs to move the paddle to make the ball break the bricks.
-* But after a long training it is fascinating to see that the agent is achieving superhuman capability by learning that it can dig up a tunnel through the brick walls for the maximum score and do nothing when the ball goes above the brick walls.
-* It still needs more training to 100% break the bricks.
+During the initial training phase, the agent began to understand that moving the paddle to hit the ball and break the brick walls was crucial. As training progressed, it was fascinating to witness the agent achieving superhuman capabilities. It discovered an advanced strategy: digging a tunnel through the brick walls for maximum scoring, allowing the ball to bounce behind the walls and rack up points effortlessly.  
+My agent got an impressive maximum evaluation score of 419 and a training score of 424 during the training. For context, the maximum evaluation score reported in the (https://www.nature.com/articles/nature14236) article is 428.  
+There's still room for improvement to consistently break all the bricks and achieve the maximum score.
